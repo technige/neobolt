@@ -29,6 +29,21 @@ class ProtocolError(Exception):
     """
 
 
+class ConnectionUnavailable(Exception):
+    """ Raised when a network connection is or becomes unavailable.
+    """
+
+
+class ConnectionUnreadable(ConnectionUnavailable):
+    """
+    """
+
+
+class ConnectionUnwritable(ConnectionUnavailable):
+    """
+    """
+
+
 class ServiceUnavailable(Exception):
     """ Raised when no database service is available.
     """

@@ -52,7 +52,7 @@ from neobolt.addressing import SocketAddress, Resolver
 from neobolt.exceptions import ClientError, ProtocolError, SecurityError, \
     ServiceUnavailable, AuthError, CypherError, IncompleteCommitError, \
     ConnectionExpired, DatabaseUnavailableError, NotALeaderError, \
-    ForbiddenOnReadOnlyDatabaseError
+    ForbiddenOnReadOnlyDatabaseError, ConnectionUnwritable, ConnectionUnreadable
 from neobolt.meta import get_user_agent
 from neobolt.packstream import Packer, Unpacker, UnpackableBuffer
 from neobolt.security import make_ssl_context
@@ -521,24 +521,22 @@ class Connection(object):
         """ Send all queued messages to the server.
         """
         if self.closed():
-            raise self.Error("Failed to write to closed connection "
-                             "{!r} ({!r})".format(self.unresolved_address,
-                                                  self.server.address))
+            raise ConnectionUnwritable(
+                "Cannot write to closed connection to {!r} ({!r})".format(
+                    self.unresolved_address, self.server.address))
         if self.defunct():
-            raise self.Error("Failed to write to defunct connection "
-                             "{!r} ({!r})".format(self.unresolved_address,
-                                                  self.server.address))
+            raise ConnectionUnwritable(
+                "Cannot write to defunct connection to {!r} ({!r})".format(
+                    self.unresolved_address, self.server.address))
         try:
             self._send_all()
         except (IOError, OSError) as error:
-            log.error("Failed to write data to connection "
-                      "{!r} ({!r}); ({!r})".
-                      format(self.unresolved_address,
-                             self.server.address,
-                             "; ".join(map(repr, error.args))))
+            log.error("%s: %s", error.__class__.__name__, error.args[0])
             if self.pool:
                 self.pool.deactivate(self.unresolved_address)
-            raise
+            raise ConnectionUnwritable(
+                "Failed to write to connection to {!r} ({!r})".format(
+                    self.unresolved_address, self.server.address))
 
     def fetch_message(self):
         """ Receive at least one message from the server, if available.
@@ -547,13 +545,13 @@ class Connection(object):
                  messages fetched
         """
         if self._closed:
-            raise self.Error("Failed to read from closed connection "
-                             "{!r} ({!r})".format(self.unresolved_address,
-                                                  self.server.address))
+            raise ConnectionUnreadable(
+                "Cannot read from closed connection to {!r} ({!r})".format(
+                    self.unresolved_address, self.server.address))
         if self._defunct:
-            raise self.Error("Failed to read from defunct connection "
-                             "{!r} ({!r})".format(self.unresolved_address,
-                                                  self.server.address))
+            raise ConnectionUnreadable(
+                "Cannot read from defunct connection to {!r} ({!r})".format(
+                    self.unresolved_address, self.server.address))
         if not self.responses:
             return 0, 0
 
@@ -561,14 +559,12 @@ class Connection(object):
         try:
             details, summary_signature, summary_metadata = next(self.inbox)
         except (IOError, OSError) as error:
-            log.error("Failed to read data from connection "
-                      "{!r} ({!r}); ({!r})".
-                      format(self.unresolved_address,
-                             self.server.address,
-                             "; ".join(map(repr, error.args))))
+            log.error("%s: %s", error.__class__.__name__, error.args[0])
             if self.pool:
                 self.pool.deactivate(self.unresolved_address)
-            raise
+            raise ConnectionUnreadable(
+                "Failed to read from connection to {!r} ({!r})".format(
+                    self.unresolved_address, self.server.address))
 
         if details:
             log.debug("[#%04X]  S: RECORD * %d", self.local_port, len(details))  # TODO

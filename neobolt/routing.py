@@ -28,7 +28,8 @@ from time import perf_counter
 
 from neobolt.addressing import SocketAddress
 from neobolt.direct import AbstractConnectionPool, DEFAULT_PORT
-from neobolt.exceptions import ConnectionExpired, ServiceUnavailable
+from neobolt.exceptions import ConnectionExpired, ServiceUnavailable, \
+    ConnectionUnavailable
 from neobolt.versioning import Version
 
 
@@ -393,13 +394,14 @@ class RoutingConnectionPool(AbstractConnectionPool):
             if address is None:
                 break
             try:
-                connection = self.acquire_direct(address)  # should always be a resolved address
-                connection.Error = ConnectionExpired
+                # `address` should always be a resolved address
+                connection = self.acquire_direct(address)
             except ServiceUnavailable:
                 self.deactivate(address)
             else:
                 return connection
-        raise ConnectionExpired("Failed to obtain connection towards '%s' server." % access_mode)
+        raise ConnectionUnavailable("Failed to acquire connection to '%s' "
+                                    "server." % access_mode)
 
     def deactivate(self, address):
         """ Deactivate an address from the connection pool,
